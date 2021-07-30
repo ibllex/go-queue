@@ -11,7 +11,7 @@ type Connector func() Queue
 
 var (
 	connections     = map[string]Connector{}
-	defaultConnName = "sync"
+	defaultConnName = "memory"
 )
 
 // AddConnection add a queue connector
@@ -43,17 +43,15 @@ func SetDefaultConnection(name string) {
 //
 
 type DispatchOption struct {
-	Message    Message
 	Connection string
-	Queue      string
 	Delay      time.Duration
 }
 
 // Dispatch an message to queue
-func Dispatch(opt *DispatchOption) error {
+func Dispatch(opt *DispatchOption, messages ...interface{}) error {
 
-	if opt.Message == nil {
-		return errors.New("invalid message")
+	if len(messages) == 0 {
+		return errors.New("no message to dispatch")
 	}
 
 	if opt.Connection == "" {
@@ -65,17 +63,9 @@ func Dispatch(opt *DispatchOption) error {
 		return err
 	}
 
-	if opt.Queue != "" && opt.Delay > 0 {
-		return q.LaterOn(opt.Queue, opt.Delay, opt.Message)
-	}
-
-	if opt.Queue != "" {
-		return q.PushOn(opt.Queue, opt.Message)
-	}
-
 	if opt.Delay > 0 {
-		return q.Later(opt.Delay, opt.Message)
+		return q.Later(opt.Delay, messages...)
 	}
 
-	return q.Push(opt.Message)
+	return q.Publish(messages...)
 }
