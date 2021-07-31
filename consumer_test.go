@@ -52,15 +52,15 @@ func (q *MockQueue) Fetch(ctx context.Context, n int) ([]queue.Message, error) {
 	}
 }
 
-func NewMockQueue(name string, bufferSize int, timeout time.Duration) *MockQueue {
+func NewMockQueue(name string, timeout time.Duration, opts ...memq.Option) *MockQueue {
 	return &MockQueue{
-		Queue:   memq.NewQueue(name, bufferSize),
+		Queue:   memq.NewQueue(name, opts...),
 		timeout: timeout,
 	}
 }
 
 func TestStartConsumer(t *testing.T) {
-	q := NewMockQueue("default", 10, 0)
+	q := NewMockQueue("default", 0)
 	queue.Add(q)
 
 	t.Run("manual stop consumer", func(t *testing.T) {
@@ -104,7 +104,7 @@ func TestConsume(t *testing.T) {
 
 	t.Run("don't fetch new messages when all workers are busy", func(t *testing.T) {
 
-		q := NewMockQueue("default", 1000, 0)
+		q := NewMockQueue("default", 0)
 		q.Publish(0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
 		queue.Add(q)
 
@@ -113,8 +113,8 @@ func TestConsume(t *testing.T) {
 			MaxNumWorker: 1,
 			PrefetchSize: 2,
 			Handler: queue.H(func(m queue.Message) {
-				time.Sleep(200 * time.Millisecond)
-				m.Accept()
+				time.Sleep(400 * time.Millisecond)
+				m.Ack()
 			}),
 		})
 		assert.Nil(t, err)
@@ -127,7 +127,7 @@ func TestConsume(t *testing.T) {
 
 	t.Run("timeout while fetching message", func(t *testing.T) {
 
-		q := NewMockQueue("timeout", 1000, time.Second)
+		q := NewMockQueue("timeout", time.Second)
 		q.Publish(0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
 		queue.Add(q)
 

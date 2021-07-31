@@ -1,12 +1,17 @@
 package memq
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 )
 
 type Message struct {
+	q    *Queue
 	data interface{}
+
+	acked    bool
+	rejected bool
 }
 
 func (m *Message) Unmarshal(value interface{}) error {
@@ -25,9 +30,18 @@ func (m *Message) Body() []byte {
 }
 
 func (m *Message) Reject() error {
-	return nil
+	if m.acked {
+		return errors.New("you can not reject an acked message")
+	}
+
+	m.rejected = true
+	return m.q.Publish(m.data)
 }
 
-func (m *Message) Accept() error {
+func (m *Message) Ack() error {
+	if m.rejected {
+		return errors.New("you can not ack a rejected message")
+	}
+	m.acked = true
 	return nil
 }
