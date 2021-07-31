@@ -80,11 +80,9 @@ func (q *Queue) Fetch(ctx context.Context, n int) (messages []queue.Message, err
 			for _, msg := range messages {
 				msg.Reject()
 			}
-			return nil, errors.New("fetch time out")
+			return nil, errors.New("fetch was canceled")
 		case data := <-q.buffer:
-			messages = append(messages, &Message{
-				q: q, data: data,
-			})
+			messages = append(messages, NewMessage(q, data))
 		default:
 		}
 	}

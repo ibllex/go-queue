@@ -4,14 +4,20 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+
+	"github.com/ibllex/go-queue"
 )
 
 type Message struct {
-	q    *Queue
+	q    queue.Queue
 	data interface{}
 
 	acked    bool
 	rejected bool
+}
+
+func (m *Message) Name() string {
+	return fmt.Sprintf("%v", m.data)
 }
 
 func (m *Message) Unmarshal(value interface{}) error {
@@ -44,4 +50,23 @@ func (m *Message) Ack() error {
 	}
 	m.acked = true
 	return nil
+}
+
+func (m *Message) Status() queue.MessageStatus {
+	if m.acked {
+		return queue.Acked
+	}
+
+	if m.rejected {
+		return queue.Rejected
+	}
+
+	return queue.Pending
+}
+
+func NewMessage(q queue.Queue, v interface{}) *Message {
+	return &Message{
+		q:    q,
+		data: v,
+	}
 }

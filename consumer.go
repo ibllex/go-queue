@@ -68,20 +68,20 @@ type Consumer struct {
 	state int32 // atomic
 
 	// Pending message
-	messages chan Message
+	pending chan Message
 }
 
 // Start consuming messages in the queue.
 func (c *Consumer) Start(ctx context.Context) error {
 
 	if atomic.LoadInt32(&c.state) == stateStarted {
-		return fmt.Errorf("consumer[%s-%s] is already started", c.q.Name(), c.opt.ID)
+		return fmt.Errorf("Consumer[%s-%s] is already started", c.q.Name(), c.opt.ID)
 	}
 
 	go c.start(ctx)
 	atomic.StoreInt32(&c.state, stateStarted)
 
-	logger.Infof("consumer[%s-%s] started", c.q.Name(), c.opt.ID)
+	logger.Infof("Consumer[%s-%s] started", c.q.Name(), c.opt.ID)
 	return nil
 }
 
@@ -96,7 +96,7 @@ func (c *Consumer) start(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			atomic.StoreInt32(&c.state, stateStoped)
-			logger.Infof("consumer[%s-%s] stopped", c.q.Name(), c.opt.ID)
+			logger.Infof("Consumer[%s-%s] stopped", c.q.Name(), c.opt.ID)
 			return
 		default:
 			c.consume(ctx)
@@ -109,11 +109,12 @@ func (c *Consumer) consume(ctx context.Context) error {
 	timeout, _ := context.WithTimeout(ctx, c.opt.FetchTimeout)
 	messages, err := c.q.Fetch(timeout, c.opt.PrefetchSize)
 	if err != nil {
+		logger.Errorf("Consumer[%s-%s] fetching error %s", c.q.Name(), c.opt.ID, err)
 		return err
 	}
 
 	for _, msg := range messages {
-		c.messages <- msg
+		c.pending <- msg
 		go c.process(msg)
 	}
 
@@ -122,10 +123,21 @@ func (c *Consumer) consume(ctx context.Context) error {
 
 // Process message bypassing the internal queue
 func (c *Consumer) process(msg Message) error {
+	logger.Infof("Consumer[%s-%s] Processing %s", c.q.Name(), c.opt.ID, msg.Name())
 	if c.opt.Handler != nil {
 		c.opt.Handler.Handle(msg)
 	}
-	<-c.messages
+
+	switch msg.Status() {
+	case Acked:
+		logger.Infof("Consumer[%s-%s] Processed %s", c.q.Name(), c.opt.ID, msg.Name())
+	case Rejected:
+		logger.Error("Consumer[%s-%s] Failed %s", c.q.Name(), c.opt.ID, msg.Name())
+	case Pending:
+		logger.Error("Consumer[%s-%s] Still Pending %s", c.q.Name(), c.opt.ID, msg.Name())
+	}
+
+	<-c.pending
 	return nil
 }
 
@@ -157,7 +169,7 @@ func NewConsumer(queue string, opt *ConsumerOption) (*Consumer, error) {
 
 	c := &Consumer{
 		q: q, opt: opt,
-		messages: make(chan Message, opt.MaxNumWorker),
+		pending: make(chan Message, opt.MaxNumWorker),
 	}
 
 	return c, nil
