@@ -1,7 +1,10 @@
 package queue
 
 import (
+	"context"
+	"errors"
 	"runtime"
+	"sync/atomic"
 	"time"
 )
 
@@ -18,6 +21,15 @@ func (fn HandlerFunc) Handle(message Message) {
 func H(hanlder HandlerFunc) Handler {
 	return hanlder
 }
+
+//
+// Consumer status
+//
+
+const (
+	stateStoped = iota
+	stateStarted
+)
 
 type ConsumerOption struct {
 	// PollDuration is the duration the queue sleeps before checking for new messages
@@ -41,22 +53,38 @@ type ConsumerOption struct {
 type Consumer struct {
 	opt *ConsumerOption
 	q   Queue
+
+	state int32 // atomic
 }
 
 // Start consuming messages in the queue.
-func (c *Consumer) Start() error {
-	go c.start()
+func (c *Consumer) Start(ctx context.Context) error {
+
+	if atomic.LoadInt32(&c.state) == stateStarted {
+		return errors.New("queue: consumer is already started")
+	}
+
+	go c.start(ctx)
+	atomic.StoreInt32(&c.state, stateStarted)
+
 	return nil
 }
 
-func (c *Consumer) start() {
+func (c *Consumer) start(ctx context.Context) {
 
 	t := time.NewTicker(c.opt.PollDuration)
 	defer t.Stop()
 
 	for {
 		<-t.C
-		c.consume()
+
+		select {
+		case <-ctx.Done():
+			atomic.StoreInt32(&c.state, stateStoped)
+			return
+		default:
+			c.consume()
+		}
 	}
 
 }
