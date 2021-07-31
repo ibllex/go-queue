@@ -6,36 +6,33 @@ import (
 	"time"
 )
 
-// Connector is a function to create a queue connection
-type Connector func() Queue
-
 var (
-	connections     = map[string]Connector{}
-	defaultConnName = "memory"
+	queues       = map[string]Queue{}
+	defaultQueue = "memory"
 )
 
-// AddConnection add a queue connector
-func AddConnection(name string, connector Connector) {
-	connections[name] = connector
+// Add add a queue connector
+func Add(queue Queue) {
+	queues[queue.Name()] = queue
 }
 
-// GetConnection returns the connection for given name
-func GetConnection(name string) (Queue, error) {
-	if connector, ok := connections[name]; ok {
-		return connector(), nil
+// Get returns the queue for given name
+func Get(name string) (Queue, error) {
+	if q, ok := queues[name]; ok {
+		return q, nil
 	}
 
-	return nil, fmt.Errorf("connection %s not found", name)
+	return nil, fmt.Errorf("queue %s not found", name)
 }
 
-// DefaultConnection returns the connection for default connection name
-func DefaultConnection() (Queue, error) {
-	return GetConnection(defaultConnName)
+// Default returns the queue for default name
+func Default() (Queue, error) {
+	return Get(defaultQueue)
 }
 
-// SetDefaultConnection set the name of the default queue connection
-func SetDefaultConnection(name string) {
-	defaultConnName = name
+// SetDefault set the name of the default queue
+func SetDefault(name string) {
+	defaultQueue = name
 }
 
 //
@@ -43,8 +40,8 @@ func SetDefaultConnection(name string) {
 //
 
 type DispatchOption struct {
-	Connection string
-	Delay      time.Duration
+	Queue string
+	Delay time.Duration
 }
 
 // Dispatch an message to queue
@@ -54,11 +51,11 @@ func Dispatch(opt *DispatchOption, messages ...interface{}) error {
 		return errors.New("no message to dispatch")
 	}
 
-	if opt.Connection == "" {
-		opt.Connection = defaultConnName
+	if opt.Queue == "" {
+		opt.Queue = defaultQueue
 	}
 
-	q, err := GetConnection(opt.Connection)
+	q, err := Get(opt.Queue)
 	if err != nil {
 		return err
 	}

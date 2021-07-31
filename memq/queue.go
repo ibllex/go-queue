@@ -8,15 +8,21 @@ import (
 )
 
 type Queue struct {
+	name   string
 	buffer chan interface{}
 }
 
-func NewQueue(bufferSize int) *Queue {
+func NewQueue(name string, bufferSize int) *Queue {
 	q := &Queue{
+		name:   name,
 		buffer: make(chan interface{}, bufferSize),
 	}
 
 	return q
+}
+
+func (q *Queue) Name() string {
+	return q.name
 }
 
 func (q *Queue) Publish(messages ...interface{}) error {

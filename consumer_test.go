@@ -13,6 +13,11 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func init() {
+	// disable logger
+	queue.SetLogger(nil)
+}
+
 type MockQueue struct {
 	*memq.Queue
 
@@ -47,31 +52,27 @@ func (q *MockQueue) Fetch(ctx context.Context, n int) ([]queue.Message, error) {
 	}
 }
 
-func NewMockQueue(bufferSize int, timeout time.Duration) *MockQueue {
+func NewMockQueue(name string, bufferSize int, timeout time.Duration) *MockQueue {
 	return &MockQueue{
-		Queue:   memq.NewQueue(bufferSize),
+		Queue:   memq.NewQueue(name, bufferSize),
 		timeout: timeout,
 	}
 }
 
 func TestStartConsumer(t *testing.T) {
-	conn := "default"
-	q := NewMockQueue(10, 0)
-
-	queue.AddConnection(conn, func() queue.Queue {
-		return q
-	})
+	q := NewMockQueue("default", 10, 0)
+	queue.Add(q)
 
 	t.Run("manual stop consumer", func(t *testing.T) {
 		ctx, stop := context.WithCancel(context.Background())
 
-		c, err := queue.NewConsumer(conn, &queue.ConsumerOption{
+		c, err := queue.NewConsumer(q.Name(), &queue.ConsumerOption{
 			PollDuration: 100 * time.Millisecond,
 		})
 
 		assert.Nil(t, err)
 		c.Start(ctx)
-		time.Sleep(200 * time.Millisecond)
+		time.Sleep(250 * time.Millisecond)
 
 		stop()
 		assert.Equal(t, 2, q.fetchTimes)
@@ -83,7 +84,7 @@ func TestStartConsumer(t *testing.T) {
 	t.Run("start multi times", func(t *testing.T) {
 
 		ctx, stop := context.WithCancel(context.Background())
-		c, err := queue.NewConsumer(conn, &queue.ConsumerOption{
+		c, err := queue.NewConsumer(q.Name(), &queue.ConsumerOption{
 			PollDuration: 100 * time.Millisecond,
 		})
 		assert.Nil(t, err)
@@ -100,16 +101,14 @@ func TestStartConsumer(t *testing.T) {
 }
 
 func TestConsume(t *testing.T) {
-	conn := "default"
-	q := NewMockQueue(1000, 0)
-	q.Publish(0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
-
-	queue.AddConnection(conn, func() queue.Queue {
-		return q
-	})
 
 	t.Run("don't fetch new messages when all workers are busy", func(t *testing.T) {
-		c, err := queue.NewConsumer(conn, &queue.ConsumerOption{
+
+		q := NewMockQueue("default", 1000, 0)
+		q.Publish(0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
+		queue.Add(q)
+
+		c, err := queue.NewConsumer(q.Name(), &queue.ConsumerOption{
 			PollDuration: 100 * time.Millisecond,
 			MaxNumWorker: 1,
 			PrefetchSize: 2,
@@ -127,10 +126,13 @@ func TestConsume(t *testing.T) {
 	})
 
 	t.Run("timeout while fetching message", func(t *testing.T) {
-		q = NewMockQueue(1000, time.Second)
+
+		q := NewMockQueue("timeout", 1000, time.Second)
 		q.Publish(0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
+		queue.Add(q)
+
 		var processed int32 = 0
-		c, err := queue.NewConsumer(conn, &queue.ConsumerOption{
+		c, err := queue.NewConsumer("timeout", &queue.ConsumerOption{
 			PollDuration: 50 * time.Millisecond,
 			MaxNumWorker: 1,
 			FetchTimeout: 100 * time.Millisecond,

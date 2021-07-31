@@ -2,10 +2,13 @@ package queue
 
 import (
 	"context"
-	"errors"
+	"fmt"
 	"runtime"
 	"sync/atomic"
 	"time"
+
+	"github.com/ibllex/go-queue/internal"
+	"github.com/ibllex/go-queue/internal/logger"
 )
 
 type Handler interface {
@@ -32,6 +35,10 @@ const (
 )
 
 type ConsumerOption struct {
+	// For logging, if it is empty,
+	// a random string will be automatically generated
+	ID string
+
 	// PollDuration is the duration the queue sleeps before checking for new messages
 	// Default is 1 second
 	PollDuration time.Duration
@@ -68,12 +75,13 @@ type Consumer struct {
 func (c *Consumer) Start(ctx context.Context) error {
 
 	if atomic.LoadInt32(&c.state) == stateStarted {
-		return errors.New("queue: consumer is already started")
+		return fmt.Errorf("consumer[%s-%s] is already started", c.q.Name(), c.opt.ID)
 	}
 
 	go c.start(ctx)
 	atomic.StoreInt32(&c.state, stateStarted)
 
+	logger.Infof("consumer[%s-%s] started", c.q.Name(), c.opt.ID)
 	return nil
 }
 
@@ -88,6 +96,7 @@ func (c *Consumer) start(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			atomic.StoreInt32(&c.state, stateStoped)
+			logger.Infof("consumer[%s-%s] stopped", c.q.Name(), c.opt.ID)
 			return
 		default:
 			c.consume(ctx)
@@ -120,8 +129,8 @@ func (c *Consumer) process(msg Message) error {
 	return nil
 }
 
-func NewConsumer(conn string, opt *ConsumerOption) (*Consumer, error) {
-	q, err := GetConnection(conn)
+func NewConsumer(queue string, opt *ConsumerOption) (*Consumer, error) {
+	q, err := Get(queue)
 	if err != nil {
 		return nil, err
 	}
@@ -141,6 +150,9 @@ func NewConsumer(conn string, opt *ConsumerOption) (*Consumer, error) {
 	}
 	if opt.FetchTimeout <= 0 {
 		opt.FetchTimeout = 10 * time.Second
+	}
+	if opt.ID == "" {
+		opt.ID = internal.RandomString(6)
 	}
 
 	c := &Consumer{
