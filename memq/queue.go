@@ -1,6 +1,7 @@
 package memq
 
 import (
+	"context"
 	"time"
 
 	"github.com/ibllex/go-queue"
@@ -34,7 +35,7 @@ func (q *Queue) Later(delay time.Duration, messages ...interface{}) error {
 	return nil
 }
 
-func (q *Queue) Fetch(n int) (messages []queue.Message, err error) {
+func (q *Queue) Fetch(ctx context.Context, n int) (messages []queue.Message, err error) {
 
 	for i := 0; i <= n; i++ {
 		select {

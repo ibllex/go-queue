@@ -43,6 +43,10 @@ type ConsumerOption struct {
 	// The number of messages prefetched in the queue in a poll.
 	// Default is 10.
 	PrefetchSize int
+	// Time that a polling receive call waits for messages to become
+	// available before returning an empty response.
+	// Default is 10 seconds
+	FetchTimeout time.Duration
 
 	// Message handler
 	Handler Handler
@@ -86,14 +90,15 @@ func (c *Consumer) start(ctx context.Context) {
 			atomic.StoreInt32(&c.state, stateStoped)
 			return
 		default:
-			c.consume()
+			c.consume(ctx)
 		}
 	}
 
 }
 
-func (c *Consumer) consume() error {
-	messages, err := c.q.Fetch(c.opt.PrefetchSize)
+func (c *Consumer) consume(ctx context.Context) error {
+	timeout, _ := context.WithTimeout(ctx, c.opt.FetchTimeout)
+	messages, err := c.q.Fetch(timeout, c.opt.PrefetchSize)
 	if err != nil {
 		return err
 	}
@@ -131,8 +136,11 @@ func NewConsumer(conn string, opt *ConsumerOption) (*Consumer, error) {
 	if opt.PrefetchSize <= 0 {
 		opt.PrefetchSize = 10
 	}
-	if opt.MaxNumWorker == 0 {
+	if opt.MaxNumWorker <= 0 {
 		opt.MaxNumWorker = int32(runtime.NumCPU())
+	}
+	if opt.FetchTimeout <= 0 {
+		opt.FetchTimeout = 10 * time.Second
 	}
 
 	c := &Consumer{
