@@ -55,6 +55,9 @@ type Consumer struct {
 	q   Queue
 
 	state int32 // atomic
+
+	// Pending message
+	messages chan Message
 }
 
 // Start consuming messages in the queue.
@@ -96,6 +99,7 @@ func (c *Consumer) consume() error {
 	}
 
 	for _, msg := range messages {
+		c.messages <- msg
 		go c.process(msg)
 	}
 
@@ -107,6 +111,7 @@ func (c *Consumer) process(msg Message) error {
 	if c.opt.Handler != nil {
 		c.opt.Handler.Handle(msg)
 	}
+	<-c.messages
 	return nil
 }
 
@@ -130,5 +135,10 @@ func NewConsumer(conn string, opt *ConsumerOption) (*Consumer, error) {
 		opt.MaxNumWorker = int32(runtime.NumCPU())
 	}
 
-	return &Consumer{q: q, opt: opt}, nil
+	c := &Consumer{
+		q: q, opt: opt,
+		messages: make(chan Message, opt.MaxNumWorker),
+	}
+
+	return c, nil
 }
