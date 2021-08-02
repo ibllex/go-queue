@@ -10,17 +10,16 @@ jobs:
 
   build:
     runs-on: ubuntu-latest
-    services:
-      rabbitmq:
-        image: rabbitmq
-        ports:
-          - 5672:5672
-        env:
-          RABBITMQ_DEFAULT_USER: rabbit
-          RABBITMQ_DEFAULT_PASS: rabbit
-        
     steps:
     - uses: actions/checkout@v2
+
+    - name: Start RabbitMQ
+      uses: getong/rabbitmq-action@v1.2
+      with:
+        rabbitmq user: 'rabbit'
+        rabbitmq password: 'rabbit'
+        rabbitmq vhost: '/'
+
     - name: Set up Go
       uses: actions/setup-go@v2
       with:
