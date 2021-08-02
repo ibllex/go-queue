@@ -13,7 +13,7 @@ import (
 
 const (
 	route = "test"
-	url   = "amqp://rabbit:rabbit@localhost:5672"
+	url   = "amqp://rabbit:rabbit@127.0.0.1:5672"
 )
 
 var q *rabbitmq.Queue
