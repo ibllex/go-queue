@@ -10,15 +10,20 @@ jobs:
 
   build:
     runs-on: ubuntu-latest
+    
+    services:
+      rabbitmq:
+        image: rabbitmq:alpine
+        env:
+          RABBITMQ_DEFAULT_USER: rabbit
+          RABBITMQ_DEFAULT_PASS: rabbit
+        ports:
+          - 5672:5672
+          - 15672:15672
+          - 15671:15671
+
     steps:
     - uses: actions/checkout@v2
-
-    - name: Start RabbitMQ
-      uses: mer-team/rabbitmq-mng-action@v1.2
-      with:
-        RABBITMQ_PORT: 5672
-        RABBITMQ_USER: rabbit
-        RABBITMQ_PASS: rabbit
 
     - name: Waiting for RabbitMQ    
       uses: iFaxity/wait-on-action@v1
