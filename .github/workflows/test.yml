@@ -21,12 +21,6 @@ jobs:
           - 5672:5672
           - 15672:15672
           - 15671:15671
-      postgres:
-        image: postgres
-        env:
-          POSTGRES_PASSWORD: postgres
-        ports:
-          - 5432:5432
 
     steps:
     - uses: actions/checkout@v2
