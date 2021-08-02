@@ -25,5 +25,9 @@ jobs:
       with:
         go-version: 1.14
 
+    - name: Sleep for 10 seconds
+      run: sleep 10s
+      shell: bash
+
     - name: Test
       run: go test -v ./...
