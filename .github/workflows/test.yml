@@ -16,9 +16,15 @@ jobs:
     - name: Start RabbitMQ
       uses: getong/rabbitmq-action@v1.2
       with:
+        host port: 5672
         rabbitmq user: 'rabbit'
         rabbitmq password: 'rabbit'
         rabbitmq vhost: '/'
+
+    - name: Waiting for RabbitMQ    
+      uses: iFaxity/wait-on-action@v1
+      with:
+        resource: tcp://localhost:5672
 
     - name: Set up Go
       uses: actions/setup-go@v2
