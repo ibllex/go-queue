@@ -12,18 +12,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v2
+        
+    - name: Setup RabbitMQ with username and password
+      uses: getong/rabbitmq-action@v1.2
+      with:
+        host port: 5672
+        rabbitmq user: rabbit
+        rabbitmq password: rabbit
 
     - name: Set up Go
       uses: actions/setup-go@v2
       with:
         go-version: 1.14
-        
-    - name: Setup RabbitMQ with username and password
-      uses: getong/rabbitmq-action@v1.2
-      with:
-        # The port of host
-        rabbitmq user: rabbit
-        rabbitmq password: rabbit
 
     - name: Test
       run: go test -v ./...
