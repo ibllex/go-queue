@@ -2,7 +2,6 @@ package memq
 
 import (
 	"context"
-	"errors"
 	"time"
 
 	"github.com/ibllex/go-queue"
@@ -25,7 +24,7 @@ func WithBufferSize(bufferSize int) Option {
 
 type Queue struct {
 	name   string
-	buffer chan interface{}
+	buffer chan queue.Message
 }
 
 func NewQueue(name string, opts ...Option) *Queue {
@@ -42,7 +41,7 @@ func NewQueue(name string, opts ...Option) *Queue {
 
 	q := &Queue{
 		name:   name,
-		buffer: make(chan interface{}, opt.BufferSize),
+		buffer: make(chan queue.Message, opt.BufferSize),
 	}
 
 	return q
@@ -56,9 +55,26 @@ func (q *Queue) Name() string {
 	return q.name
 }
 
+func (q *Queue) Daemon(ctx context.Context, handler queue.HandlerFunc) error {
+
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
+		case msg := <-q.buffer:
+			handler(msg)
+		}
+	}
+
+}
+
+func (q *Queue) Consumer(opt *queue.ConsumerOption) (*queue.Consumer, error) {
+	return queue.NewConsumer(q, opt)
+}
+
 func (q *Queue) Publish(messages ...interface{}) error {
 	for _, msg := range messages {
-		q.buffer <- msg
+		q.buffer <- NewMessage(q, msg)
 	}
 	return nil
 }
@@ -70,22 +86,4 @@ func (q *Queue) Later(delay time.Duration, messages ...interface{}) error {
 	})
 
 	return nil
-}
-
-func (q *Queue) Fetch(ctx context.Context, n int) (messages []queue.Message, err error) {
-
-	for i := 0; i < n; i++ {
-		select {
-		case <-ctx.Done():
-			for _, msg := range messages {
-				msg.Reject()
-			}
-			return nil, errors.New("fetch was canceled")
-		case data := <-q.buffer:
-			messages = append(messages, NewMessage(q, data))
-		default:
-		}
-	}
-
-	return
 }

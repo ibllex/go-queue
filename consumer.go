@@ -4,12 +4,16 @@ import (
 	"context"
 	"fmt"
 	"runtime"
+	"sync"
 	"sync/atomic"
-	"time"
 
 	"github.com/ibllex/go-queue/internal"
 	"github.com/ibllex/go-queue/internal/logger"
 )
+
+//
+// Consumer
+//
 
 type Handler interface {
 	Handle(Message)
@@ -25,13 +29,10 @@ func H(hanlder HandlerFunc) Handler {
 	return hanlder
 }
 
-//
-// Consumer status
-//
-
+// Consumer state
 const (
-	stateStoped = iota
-	stateStarted
+	StateStoped = iota
+	StateStarted
 )
 
 type ConsumerOption struct {
@@ -39,137 +40,122 @@ type ConsumerOption struct {
 	// a random string will be automatically generated
 	ID string
 
-	// PollDuration is the duration the queue sleeps before checking for new messages
-	// Default is 1 second
-	PollDuration time.Duration
-
 	// Maximum number of goroutines processing messages.
 	// Default is the number of CPUs.
 	MaxNumWorker int32
 
 	// The number of messages prefetched in the queue in a poll.
 	// Default is 10.
-	PrefetchSize int
-	// Time that a polling receive call waits for messages to become
-	// available before returning an empty response.
-	// Default is 10 seconds
-	FetchTimeout time.Duration
+	PrefetchCount int
 
 	// Message handler
 	Handler Handler
 }
 
-// Consumer reserves messages from the queue, processes them,
+// consumer reserves messages from the queue, processes them,
 // and then either releases or deletes messages from the queue.
 type Consumer struct {
 	opt *ConsumerOption
-	q   Queue
+	w   Worker
 
-	state int32 // atomic
+	state int32
 
-	// Pending message
-	pending chan Message
+	// pending messages
+	pending chan struct{}
+
+	workersWG sync.WaitGroup
 }
 
 // Start consuming messages in the queue.
 func (c *Consumer) Start(ctx context.Context) error {
 
-	if atomic.LoadInt32(&c.state) == stateStarted {
-		return fmt.Errorf("Consumer[%s-%s] is already started", c.q.Name(), c.opt.ID)
+	if atomic.LoadInt32(&c.state) == StateStarted {
+		return fmt.Errorf("consumer[%s:%s] is already started", c.w.Name(), c.opt.ID)
 	}
 
 	go c.start(ctx)
-	atomic.StoreInt32(&c.state, stateStarted)
 
-	logger.Infof("Consumer[%s-%s] started", c.q.Name(), c.opt.ID)
+	atomic.StoreInt32(&c.state, StateStarted)
+	logger.Infof("consumer[%s:%s] started", c.w.Name(), c.opt.ID)
 	return nil
 }
 
 func (c *Consumer) start(ctx context.Context) {
 
-	t := time.NewTicker(c.opt.PollDuration)
-	defer t.Stop()
+	err := c.w.Daemon(ctx, func(m Message) {
+		c.workersWG.Add(1)
+		go func() {
+			defer func() {
+				c.workersWG.Done()
+				<-c.pending
+			}()
+			c.process(m)
+		}()
+		// Must be executed later than the worker,
+		// because it will block when all the workers are busy
+		c.pending <- struct{}{}
+	})
 
-	for {
-		<-t.C
-
-		select {
-		case <-ctx.Done():
-			atomic.StoreInt32(&c.state, stateStoped)
-			logger.Infof("Consumer[%s-%s] stopped", c.q.Name(), c.opt.ID)
-			return
-		default:
-			c.consume(ctx)
-		}
-	}
-
-}
-
-func (c *Consumer) consume(ctx context.Context) error {
-	timeout, _ := context.WithTimeout(ctx, c.opt.FetchTimeout)
-	messages, err := c.q.Fetch(timeout, c.opt.PrefetchSize)
 	if err != nil {
-		logger.Errorf("Consumer[%s-%s] fetching error %s", c.q.Name(), c.opt.ID, err)
-		return err
+		logger.Errorf("consumer[%s:%s] exit with error %s", c.w.Name(), c.opt.ID, err)
+		return
 	}
 
-	for _, msg := range messages {
-		c.pending <- msg
-		go c.process(msg)
-	}
+	atomic.StoreInt32(&c.state, StateStoped)
+	logger.Infof("consumer[%s:%s] waiting for all workers to exit", c.w.Name(), c.opt.ID)
+	c.workersWG.Wait()
+	logger.Infof("consumer[%s:%s] stopped", c.w.Name(), c.opt.ID)
 
-	return nil
 }
 
 // Process message bypassing the internal queue
 func (c *Consumer) process(msg Message) error {
-	logger.Infof("Consumer[%s-%s] Processing %s", c.q.Name(), c.opt.ID, msg.Name())
+	logger.Infof("consumer[%s:%s] Processing %s", c.w.Name(), c.opt.ID, msg.Name())
 	if c.opt.Handler != nil {
 		c.opt.Handler.Handle(msg)
 	}
 
 	switch msg.Status() {
 	case Acked:
-		logger.Infof("Consumer[%s-%s] Processed %s", c.q.Name(), c.opt.ID, msg.Name())
+		logger.Infof("consumer[%s:%s] Processed %s", c.w.Name(), c.opt.ID, msg.Name())
 	case Rejected:
-		logger.Error("Consumer[%s-%s] Failed %s", c.q.Name(), c.opt.ID, msg.Name())
+		logger.Error("consumer[%s:%s] Failed %s", c.w.Name(), c.opt.ID, msg.Name())
 	case Pending:
-		logger.Error("Consumer[%s-%s] Still Pending %s", c.q.Name(), c.opt.ID, msg.Name())
+		logger.Error("consumer[%s:%s] Still Pending %s", c.w.Name(), c.opt.ID, msg.Name())
 	}
 
-	<-c.pending
 	return nil
 }
 
-func NewConsumer(queue string, opt *ConsumerOption) (*Consumer, error) {
-	q, err := Get(queue)
-	if err != nil {
-		return nil, err
-	}
+func DefaultConsumerOption(opt *ConsumerOption) *ConsumerOption {
 
 	if opt == nil {
 		opt = &ConsumerOption{}
 	}
 
-	if opt.PollDuration <= 0 {
-		opt.PollDuration = time.Second
-	}
-	if opt.PrefetchSize <= 0 {
-		opt.PrefetchSize = 10
+	if opt.PrefetchCount <= 0 {
+		opt.PrefetchCount = 10
 	}
 	if opt.MaxNumWorker <= 0 {
 		opt.MaxNumWorker = int32(runtime.NumCPU())
-	}
-	if opt.FetchTimeout <= 0 {
-		opt.FetchTimeout = 10 * time.Second
 	}
 	if opt.ID == "" {
 		opt.ID = internal.RandomString(6)
 	}
 
+	return opt
+}
+
+func NewConsumer(w Worker, opt *ConsumerOption) (*Consumer, error) {
+
+	opt = DefaultConsumerOption(opt)
+
 	c := &Consumer{
-		q: q, opt: opt,
-		pending: make(chan Message, opt.MaxNumWorker),
+		w: w, opt: opt,
+		// The pending list must be one less than the maximum number of workers,
+		// otherwise when all workers are busy,
+		// there will always be a message that has been taken out and has not been processed
+		pending: make(chan struct{}, opt.MaxNumWorker-1),
 	}
 
 	return c, nil

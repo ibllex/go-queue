@@ -2,9 +2,6 @@ package queue_test
 
 import (
 	"context"
-	"errors"
-	"fmt"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -18,75 +15,36 @@ func init() {
 	queue.SetLogger(nil)
 }
 
-type MockQueue struct {
-	*memq.Queue
-
-	timeout    time.Duration
-	fetchTimes int
-}
-
-func (q *MockQueue) fetch(ctx context.Context, n int) ([]queue.Message, error) {
-	if q.timeout > 0 {
-		time.Sleep(q.timeout)
-	}
-
-	return q.Queue.Fetch(ctx, n)
-}
-
-func (q *MockQueue) Fetch(ctx context.Context, n int) ([]queue.Message, error) {
-	q.fetchTimes++
-	var err error
-
-	ch := make(chan []queue.Message)
-	go func() {
-		var messages []queue.Message
-		messages, err = q.fetch(ctx, n)
-		ch <- messages
-	}()
-
-	select {
-	case <-ctx.Done():
-		return nil, errors.New("timeout")
-	case messages := <-ch:
-		return messages, err
-	}
-}
-
-func NewMockQueue(name string, timeout time.Duration, opts ...memq.Option) *MockQueue {
-	return &MockQueue{
-		Queue:   memq.NewQueue(name, opts...),
-		timeout: timeout,
-	}
-}
-
 func TestStartConsumer(t *testing.T) {
-	q := NewMockQueue("default", 0)
-	queue.Add(q)
 
 	t.Run("manual stop consumer", func(t *testing.T) {
-		ctx, stop := context.WithCancel(context.Background())
+		q := memq.NewQueue("default")
+		q.Publish(0, 1, 2, 3, 4)
 
-		c, err := queue.NewConsumer(q.Name(), &queue.ConsumerOption{
-			PollDuration: 100 * time.Millisecond,
+		ctx, cancel := context.WithCancel(context.Background())
+
+		c, err := q.Consumer(&queue.ConsumerOption{
+			MaxNumWorker: 1,
+			Handler: queue.H(func(m queue.Message) {
+				time.Sleep(100 * time.Millisecond)
+				m.Ack()
+			}),
 		})
 
 		assert.Nil(t, err)
 		c.Start(ctx)
-		time.Sleep(250 * time.Millisecond)
+		time.Sleep(50 * time.Millisecond)
+		cancel()
 
-		stop()
-		assert.Equal(t, 2, q.fetchTimes)
-
-		time.Sleep(300 * time.Millisecond)
-		assert.Equal(t, 2, q.fetchTimes)
+		time.Sleep(1000 * time.Millisecond)
+		assert.NotEqual(t, 0, q.Size())
 	})
 
 	t.Run("start multi times", func(t *testing.T) {
+		q := memq.NewQueue("default")
 
 		ctx, stop := context.WithCancel(context.Background())
-		c, err := queue.NewConsumer(q.Name(), &queue.ConsumerOption{
-			PollDuration: 100 * time.Millisecond,
-		})
+		c, err := q.Consumer(nil)
 		assert.Nil(t, err)
 
 		assert.Nil(t, c.Start(ctx))
@@ -103,15 +61,13 @@ func TestStartConsumer(t *testing.T) {
 func TestConsume(t *testing.T) {
 
 	t.Run("don't fetch new messages when all workers are busy", func(t *testing.T) {
+		q := memq.NewQueue("default")
+		data := []interface{}{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
+		q.Publish(data...)
 
-		q := NewMockQueue("default", 0)
-		q.Publish(0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
-		queue.Add(q)
-
-		c, err := queue.NewConsumer(q.Name(), &queue.ConsumerOption{
-			PollDuration: 100 * time.Millisecond,
-			MaxNumWorker: 1,
-			PrefetchSize: 2,
+		c, err := q.Consumer(&queue.ConsumerOption{
+			MaxNumWorker:  1,
+			PrefetchCount: 1,
 			Handler: queue.H(func(m queue.Message) {
 				time.Sleep(400 * time.Millisecond)
 				m.Ack()
@@ -120,38 +76,9 @@ func TestConsume(t *testing.T) {
 		assert.Nil(t, err)
 
 		c.Start(context.Background())
-		time.Sleep(400 * time.Millisecond)
+		time.Sleep(300 * time.Millisecond)
 
-		assert.Equal(t, 1, q.fetchTimes)
+		assert.Equal(t, len(data)-1, q.Size())
 	})
 
-	t.Run("timeout while fetching message", func(t *testing.T) {
-
-		q := NewMockQueue("timeout", time.Second)
-		q.Publish(0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
-		queue.Add(q)
-
-		var processed int32 = 0
-		c, err := queue.NewConsumer("timeout", &queue.ConsumerOption{
-			PollDuration: 50 * time.Millisecond,
-			MaxNumWorker: 1,
-			FetchTimeout: 100 * time.Millisecond,
-			Handler: queue.H(func(m queue.Message) {
-				var i int
-				m.Unmarshal(&i)
-				fmt.Println(i)
-				atomic.AddInt32(&processed, 1)
-			}),
-		})
-
-		assert.Nil(t, err)
-		c.Start(context.Background())
-		time.Sleep(200 * time.Millisecond)
-
-		// Note that this is not 4 times but 2 times
-		// beacause the FetchTimeout is 100 millisecond
-		// consumer will not fetch new messages when is blocking
-		assert.Equal(t, 2, q.fetchTimes)
-		assert.Equal(t, int32(0), processed)
-	})
 }
