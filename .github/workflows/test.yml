@@ -13,7 +13,13 @@ jobs:
     
     services:
       rabbitmq:
-        image: rabbitmq:alpine
+        image: rabbitmq:3.8-alpine
+        # Set health checks to wait until redis has started
+        options: >-
+          --health-cmd "rabbitmq-diagnostics -q ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
         env:
           RABBITMQ_DEFAULT_USER: rabbit
           RABBITMQ_DEFAULT_PASS: rabbit
@@ -24,11 +30,6 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
-
-    - name: Waiting for RabbitMQ    
-      uses: iFaxity/wait-on-action@v1
-      with:
-        resource: tcp://localhost:5432
 
     - name: Set up Go
       uses: actions/setup-go@v2
