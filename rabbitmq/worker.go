@@ -5,13 +5,13 @@ import (
 	"fmt"
 
 	"github.com/ibllex/go-queue"
-	"github.com/streadway/amqp"
 )
 
 type Worker struct {
 	id string
 	q  *Queue
-	ch *amqp.Channel
+
+	opt *queue.ConsumerOption
 }
 
 func (w *Worker) Name() string {
@@ -19,7 +19,18 @@ func (w *Worker) Name() string {
 }
 
 func (w *Worker) Daemon(ctx context.Context, handler queue.HandlerFunc) error {
-	deliveries, err := w.ch.Consume(
+	ch, err := w.q.conn.Channel()
+	if err != nil {
+		return fmt.Errorf("create channel error: %s", err)
+	}
+
+	// prefetch setting, see (https://www.rabbitmq.com/consumer-prefetch.html) for more detail
+	err = ch.Qos(w.opt.PrefetchCount, 0, false)
+	if err != nil {
+		return fmt.Errorf("channel qos error: %s", err)
+	}
+
+	deliveries, err := ch.Consume(
 		w.q.name, // queue
 		w.id,     // consumer
 		false,    // auto-ack
@@ -36,7 +47,7 @@ func (w *Worker) Daemon(ctx context.Context, handler queue.HandlerFunc) error {
 	for {
 		select {
 		case <-ctx.Done():
-			return w.ch.Close()
+			return ch.Close()
 		case d := <-deliveries:
 			handler(NewMessage(d, w.q.opt.Codec))
 		}
@@ -44,6 +55,6 @@ func (w *Worker) Daemon(ctx context.Context, handler queue.HandlerFunc) error {
 
 }
 
-func NewWorker(id string, q *Queue, ch *amqp.Channel) *Worker {
-	return &Worker{id: id, q: q, ch: ch}
+func NewWorker(id string, q *Queue, opt *queue.ConsumerOption) *Worker {
+	return &Worker{id: id, q: q, opt: opt}
 }

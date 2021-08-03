@@ -57,20 +57,8 @@ func (q *Queue) Size() int {
 }
 
 func (q *Queue) Consumer(opt *queue.ConsumerOption) (*queue.Consumer, error) {
-
 	opt = queue.DefaultConsumerOption(opt)
-	ch, err := q.conn.Channel()
-	if err != nil {
-		return nil, fmt.Errorf("create channel error: %s", err)
-	}
-
-	// prefetch setting, see (https://www.rabbitmq.com/consumer-prefetch.html) for more detail
-	err = ch.Qos(opt.PrefetchCount, 0, false)
-	if err != nil {
-		return nil, fmt.Errorf("channel qos error: %s", err)
-	}
-
-	return queue.NewConsumer(NewWorker(opt.ID, q, ch), opt)
+	return queue.NewConsumer(NewWorker(opt.ID, q, opt), opt)
 }
 
 func (q *Queue) Publish(messages ...interface{}) (err error) {
