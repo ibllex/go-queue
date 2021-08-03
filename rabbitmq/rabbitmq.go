@@ -7,6 +7,7 @@ import (
 
 	"github.com/ibllex/go-encoding"
 	"github.com/ibllex/go-queue"
+	"github.com/ibllex/go-queue/internal"
 	"github.com/streadway/amqp"
 )
 
@@ -129,9 +130,10 @@ func (q *Queue) publish(destination string, msg interface{}) error {
 		true,        // mandatory
 		false,       // immediate
 		amqp.Publishing{
-			ContentType:  "text/plain",
-			Body:         body,
-			DeliveryMode: amqp.Persistent,
+			CorrelationId: internal.RandomString(32),
+			ContentType:   "text/plain",
+			Body:          body,
+			DeliveryMode:  amqp.Persistent,
 		},
 	)
 
