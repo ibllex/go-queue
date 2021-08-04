@@ -12,7 +12,11 @@ import (
 )
 
 type QueueOption struct {
-	// URL is a string in the AMQP URI format
+	// Connection the connection is used to receive and send messages
+	Connection *amqp.Connection
+	// URL is a string in the AMQP URI format,
+	// if you do not provide the Connection parameter,
+	// we will try to create a new connection from the URL
 	URL string
 	// Codec is using for marshal and unmarshal messages
 	// default is gob codec with s2 compression
@@ -134,12 +138,16 @@ func (q *Queue) Purge() error {
 
 func NewQueue(name string, opt *QueueOption) (*Queue, error) {
 
-	conn, err := amqp.Dial(opt.URL)
-	if err != nil {
-		return nil, fmt.Errorf("dial error: %s", err)
+	var err error
+
+	if opt.Connection == nil {
+		opt.Connection, err = amqp.Dial(opt.URL)
+		if err != nil {
+			return nil, fmt.Errorf("dial error: %s", err)
+		}
 	}
 
-	ch, err := conn.Channel()
+	ch, err := opt.Connection.Channel()
 	if err != nil {
 		return nil, fmt.Errorf("create channel error: %s", err)
 	}
@@ -165,7 +173,7 @@ func NewQueue(name string, opt *QueueOption) (*Queue, error) {
 	return &Queue{
 		name: name,
 		opt:  opt,
-		conn: conn,
+		conn: opt.Connection,
 		ch:   ch,
 	}, err
 }
