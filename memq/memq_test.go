@@ -64,3 +64,20 @@ func TestMessage(t *testing.T) {
 		assert.NotNil(t, msg.Ack())
 	})
 }
+
+type Message struct {
+	Data string
+}
+
+func TestMessageUnmarshal(t *testing.T) {
+	data := &Message{Data: "data"}
+	msg := memq.NewMessage(nil, data)
+
+	pTarget := &Message{}
+	assert.Nil(t, msg.Unmarshal(&pTarget))
+	assert.Equal(t, data.Data, pTarget.Data)
+
+	sTarget := Message{}
+	assert.Nil(t, msg.Unmarshal(&sTarget))
+	assert.Equal(t, data.Data, pTarget.Data)
+}

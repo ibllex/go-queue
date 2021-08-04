@@ -74,3 +74,9 @@ func Errorf(format string, args ...interface{}) {
 
 	logger.Errorf(format, args...)
 }
+
+func LogIfError(err error) {
+	if err != nil {
+		Error(err)
+	}
+}

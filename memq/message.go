@@ -23,12 +23,29 @@ func (m *Message) Name() string {
 func (m *Message) Unmarshal(value interface{}) error {
 
 	v := reflect.ValueOf(value)
-	if v.Type().Kind() == reflect.Ptr && v.Elem().CanSet() {
-		v.Elem().Set(reflect.ValueOf(m.data))
-		return nil
+	if v.Type().Kind() != reflect.Ptr || !v.Elem().CanSet() {
+		return fmt.Errorf("memq.Message: can not set value %v", v)
 	}
 
-	return fmt.Errorf("memq.Message: can not set value %v", v)
+	dv := reflect.ValueOf(m.data)
+	if dv.Type().Kind() != reflect.Ptr {
+		if !dv.CanAddr() {
+			return fmt.Errorf("memq.Message: can not get value %v", dv)
+		}
+
+		dv = dv.Addr()
+	}
+
+	switch v.Elem().Kind() {
+	case dv.Kind():
+		v.Elem().Set(dv)
+	case dv.Elem().Kind():
+		v.Elem().Set(dv.Elem())
+	default:
+		return fmt.Errorf("memq.Message: can not set value %v", v)
+	}
+
+	return nil
 }
 
 func (m *Message) Body() []byte {
