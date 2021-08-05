@@ -89,7 +89,7 @@ func (c *Consumer) start(ctx context.Context) {
 				c.workersWG.Done()
 				<-c.pending
 			}()
-			c.process(m)
+			c.Process(m)
 		}()
 		// Must be executed later than the worker,
 		// because it will block when all the workers are busy
@@ -109,7 +109,7 @@ func (c *Consumer) start(ctx context.Context) {
 }
 
 // Process message bypassing the internal queue
-func (c *Consumer) process(msg Message) error {
+func (c *Consumer) Process(msg Message) error {
 	logger.Infof("consumer[%s:%s] Processing %s", c.w.Name(), c.opt.ID, msg.Name())
 	if c.opt.Handler != nil {
 		c.opt.Handler.Handle(msg)

@@ -18,7 +18,7 @@ func init() {
 func TestStartConsumer(t *testing.T) {
 
 	t.Run("manual stop consumer", func(t *testing.T) {
-		q := memq.NewQueue("default")
+		q, _ := memq.NewQueue("default")
 		q.Publish(0, 1, 2, 3, 4)
 
 		ctx, cancel := context.WithCancel(context.Background())
@@ -41,7 +41,7 @@ func TestStartConsumer(t *testing.T) {
 	})
 
 	t.Run("start multi times", func(t *testing.T) {
-		q := memq.NewQueue("default")
+		q, _ := memq.NewQueue("default")
 
 		ctx, stop := context.WithCancel(context.Background())
 		c, err := q.Consumer(nil)
@@ -61,7 +61,7 @@ func TestStartConsumer(t *testing.T) {
 func TestConsume(t *testing.T) {
 
 	t.Run("don't fetch new messages when all workers are busy", func(t *testing.T) {
-		q := memq.NewQueue("default")
+		q, _ := memq.NewQueue("default")
 		data := []interface{}{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
 		q.Publish(data...)
 

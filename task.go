@@ -92,6 +92,8 @@ func TaskHandler() HandlerFunc {
 			if handler, ok := task.(Task); ok {
 				logger.LogIfError(handler.Handle())
 			}
+		} else {
+			logger.Errorf("unsupport task type: %s", wrapper.Name)
 		}
 	}
 }

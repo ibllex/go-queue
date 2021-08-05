@@ -11,7 +11,7 @@ import (
 func TestQueue(t *testing.T) {
 
 	t.Run("publish", func(t *testing.T) {
-		q := memq.NewQueue("default")
+		q, _ := memq.NewQueue("default")
 		assert.Equal(t, 0, q.Size())
 
 		q.Publish(0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
@@ -19,7 +19,7 @@ func TestQueue(t *testing.T) {
 	})
 
 	t.Run("later", func(t *testing.T) {
-		q := memq.NewQueue("default")
+		q, _ := memq.NewQueue("default")
 		assert.Equal(t, 0, q.Size())
 
 		q.Later(100*time.Millisecond, "hello")
@@ -33,7 +33,7 @@ func TestQueue(t *testing.T) {
 func TestMessage(t *testing.T) {
 
 	t.Run("reject", func(t *testing.T) {
-		q := memq.NewQueue("default")
+		q, _ := memq.NewQueue("default")
 		msg := memq.NewMessage(q, 10)
 		assert.Equal(t, 0, q.Size())
 
@@ -42,7 +42,7 @@ func TestMessage(t *testing.T) {
 	})
 
 	t.Run("ack", func(t *testing.T) {
-		q := memq.NewQueue("default")
+		q, _ := memq.NewQueue("default")
 		msg := memq.NewMessage(q, 10)
 		assert.Equal(t, 0, q.Size())
 
@@ -51,14 +51,14 @@ func TestMessage(t *testing.T) {
 	})
 
 	t.Run("reject an acked message", func(t *testing.T) {
-		q := memq.NewQueue("default")
+		q, _ := memq.NewQueue("default")
 		msg := memq.NewMessage(q, 10)
 		assert.Nil(t, msg.Ack())
 		assert.NotNil(t, msg.Reject())
 	})
 
 	t.Run("ack a rejected message", func(t *testing.T) {
-		q := memq.NewQueue("default")
+		q, _ := memq.NewQueue("default")
 		msg := memq.NewMessage(q, 10)
 		assert.Nil(t, msg.Reject())
 		assert.NotNil(t, msg.Ack())
