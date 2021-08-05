@@ -8,6 +8,7 @@ Go queue provides a unified API across a variety of different queue backend like
 - Multiple message codecs (json, gob and msgpack) supported by [go-encoding](https://github.com/ibllex/go-encoding), you can also implement your own codecs.
 - Automatic message encoding and compression.
 - Support publishing raw messages for easy use with other languages.
+- Support for asynchronous task management and distribution.
 
 ## Install
 
@@ -17,7 +18,9 @@ go get -u github.com/ibllex/go-queue
 
 ## Qucik Usage
 
-Please see the [example](./example/main.go)
+For basic asynchronous message useage please see the [example/raw](./example/raw/main.go)
+
+For asynchronous task useage please see the [example/task](./example/task/main.go)
 
 ## License
 

@@ -67,9 +67,9 @@ func startConsumer(name string) {
 
 func main() {
 	// Create an in-memory queue
-	q := memq.NewQueue(route)
+	q, err := memq.NewQueue(route)
 	// You can also switch to other queue backends without changing other codes
-	// Here is rabbitmq backend example
+	// here is rabbitmq backend example
 	// q, err := rabbitmq.NewQueue(route, &rabbitmq.QueueOption{
 	// 	URL: "amqp://rabbit:rabbit@127.0.0.1:5672",
 	// 	// Codec is using for marshal and unmarshal messages
@@ -77,9 +77,10 @@ func main() {
 	// 	// for more details, please see https://github.com/ibllex/go-encoding
 	// 	Codec: encoding.NewJsonCodec(nil),
 	// })
-	// if err != nil {
-	// 	panic(err)
-	// }
+
+	if err != nil {
+		panic(err)
+	}
 
 	// Add the queue to the queue manager
 	queue.Add(q)
@@ -103,7 +104,7 @@ func main() {
 			// Use the Queue parameter to indicate that which queue you want to send messages,
 			// you can also use Delay parameter to send delay messages
 			opt := &queue.DispatchOption{Queue: route}
-			err := queue.Dispatch(opt, Task{
+			err := queue.Dispatch(opt, &Task{
 				Name: "send email",
 				Params: map[string]interface{}{
 					"subject": "hey jude",
