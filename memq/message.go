@@ -29,11 +29,9 @@ func (m *Message) Unmarshal(value interface{}) error {
 
 	dv := reflect.ValueOf(m.data)
 	if dv.Type().Kind() != reflect.Ptr {
-		if !dv.CanAddr() {
-			return fmt.Errorf("memq.Message: can not get value %v", dv)
+		if dv.CanAddr() {
+			dv = dv.Addr()
 		}
-
-		dv = dv.Addr()
 	}
 
 	switch v.Elem().Kind() {
