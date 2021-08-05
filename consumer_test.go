@@ -15,6 +15,39 @@ func init() {
 	queue.SetLogger(nil)
 }
 
+type MockWorker struct{}
+
+func TestConsumerPanic(t *testing.T) {
+	var sum = 0
+	q, _ := memq.NewQueue("default")
+	c, err := q.Consumer(&queue.ConsumerOption{
+		Handler: queue.H(func(m queue.Message) {
+			var v int
+			assert.Nil(t, m.Unmarshal(&v))
+			if v > 10 {
+				panic("God!!")
+			}
+			sum += v
+			m.Ack()
+		}),
+	})
+
+	assert.Nil(t, err)
+	assert.Nil(t, c.Start(context.Background()))
+
+	assert.Nil(t, q.Publish(4))
+	time.Sleep(100 * time.Millisecond)
+	assert.Equal(t, 4, sum)
+
+	assert.Nil(t, q.Publish(20))
+	time.Sleep(100 * time.Millisecond)
+	assert.Equal(t, 4, sum)
+
+	assert.Nil(t, q.Publish(4))
+	time.Sleep(100 * time.Millisecond)
+	assert.Equal(t, 8, sum)
+}
+
 func TestStartConsumer(t *testing.T) {
 
 	t.Run("manual stop consumer", func(t *testing.T) {

@@ -82,10 +82,25 @@ func (c *Consumer) Start(ctx context.Context) error {
 
 func (c *Consumer) start(ctx context.Context) {
 
+	defer func() {
+		if r := recover(); r != nil {
+			buf := make([]byte, 64<<10)
+			buf = buf[:runtime.Stack(buf, false)]
+			logger.Errorf("errgroup: panic recovered: %s\n%s", r, buf)
+		}
+	}()
+
 	err := c.w.Daemon(ctx, func(m Message) {
 		c.workersWG.Add(1)
 		go func() {
 			defer func() {
+
+				if r := recover(); r != nil {
+					buf := make([]byte, 64<<10)
+					buf = buf[:runtime.Stack(buf, false)]
+					logger.Errorf("errgroup: panic recovered: %s\n%s", r, buf)
+				}
+
 				c.workersWG.Done()
 				<-c.pending
 			}()
