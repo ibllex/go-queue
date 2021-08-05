@@ -2,6 +2,7 @@ package rabbitmq
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/ibllex/go-queue"
@@ -49,6 +50,9 @@ func (w *Worker) Daemon(ctx context.Context, handler queue.HandlerFunc) error {
 		case <-ctx.Done():
 			return ch.Close()
 		case d := <-deliveries:
+			if w.q.conn.IsClosed() {
+				return errors.New("queue connection closed")
+			}
 			handler(NewMessage(d, w.q.opt.Codec))
 		}
 	}
