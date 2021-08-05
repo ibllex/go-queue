@@ -1,10 +1,10 @@
 # go-queue
 
-Go queue provides a unified API across a variety of different queue backend like Redis, in-memory and RabbitMQ.
+Go queue provides a unified API across a variety of different queue backend like Redis, in-memory sync/async and RabbitMQ.
 
 ## Features
 
-- RabbitMQ, in-memory backends.
+- RabbitMQ, in-memory sync/async backends.
 - Multiple message codecs (json, gob and msgpack) supported by [go-encoding](https://github.com/ibllex/go-encoding), you can also implement your own codecs.
 - Automatic message encoding and compression.
 - Support publishing raw messages for easy use with other languages.
